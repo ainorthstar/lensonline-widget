@@ -1,62 +1,24 @@
 /**
  * LensOnline chat widget — assistant-ui based.
  *
- * For the Framer test phase the widget uses a LocalRuntime with canned
- * responses, so no backend is required to see the UI live. When the
- * production ADK agent runtime is deployed, swap useLocalRuntime for
- * the real ADK runtime adapter — the rest of the component stays the
- * same.
+ * Talks to the deployed LensOnline bot via the lensonline-chat-proxy on
+ * Cloud Run, which forwards to the Vertex AI Agent Runtime A2A endpoint.
+ * The proxy adds the Google OAuth bearer token and enforces an origin
+ * allow-list + rate limit, so the browser never sees credentials.
  */
 
-import {
-  AssistantRuntimeProvider,
-  type ChatModelAdapter,
-  useLocalRuntime,
-} from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useA2ARuntime } from "@assistant-ui/react-a2a";
 import { Thread } from "@assistant-ui/react-ui";
 import { useState } from "react";
-// Use the CSS that ships with react-ui itself — it defines the --aui-* vars
-// on :root that the Thread component depends on. The standalone
-// @assistant-ui/styles package is a newer (tailwind-4) design system and is
-// not compatible with react-ui@0.2.1's Thread.
 import "@assistant-ui/react-ui/styles/index.css";
 import "@assistant-ui/react-ui/styles/modal.css";
 
-const MOCK_RESPONSES = [
-  "Hi! Ich bin der LensOnline-assistent. Ich kann dir bei bestellungen, produkt-empfehlungen und kontakt zu unserem optiker-team helfen. Was kann ich für dich tun?",
-  "Klar, das schaue ich gerne nach. Hast du deine bestellnummer oder die e-mail, mit der du bestellt hast?",
-  "Das hängt davon ab, welche kontaktlinsen du aktuell trägst. Trägst du tageslinsen, oder monats-/zwei-wochen-linsen?",
-  "Note: this is a demo widget showing the LensOnline customer chat. When connected to the real backend, responses come from our deployed AI agent.",
-];
-
-/**
- * Mock chat-model adapter — returns canned responses round-robin so the
- * widget feels interactive on the Framer demo page without a backend.
- */
-const mockAdapter: ChatModelAdapter = {
-  async *run({ messages, abortSignal }) {
-    const turn = messages.filter((m) => m.role === "user").length;
-    const text = MOCK_RESPONSES[(turn - 1) % MOCK_RESPONSES.length] ?? "...";
-
-    // Simulate a small thinking delay + word-by-word streaming
-    await new Promise((r) => setTimeout(r, 500));
-    if (abortSignal.aborted) return;
-
-    const words = text.split(" ");
-    let current = "";
-    for (const word of words) {
-      current += (current ? " " : "") + word;
-      await new Promise((r) => setTimeout(r, 35));
-      if (abortSignal.aborted) return;
-      yield {
-        content: [{ type: "text" as const, text: current }],
-      };
-    }
-  },
-};
+const PROXY_BASE_URL =
+  "https://lensonline-chat-proxy-4739299408.europe-west1.run.app/a2a";
 
 function ChatPanel({ onClose }: { onClose: () => void }) {
-  const runtime = useLocalRuntime(mockAdapter);
+  const runtime = useA2ARuntime({ baseUrl: PROXY_BASE_URL });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
