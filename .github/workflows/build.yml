@@ -1,0 +1,37 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # Fail the build if the committed dist/ is out of sync with what the
+      # source produces. Keeps the repo honest — what we publish on jsdelivr
+      # is exactly what the source compiles to at this commit.
+      - name: verify dist/ is up to date
+        run: |
+          if [ -n "$(git status --porcelain dist/)" ]; then
+            echo "::error::dist/ is out of sync with source. Run 'npm run build' and commit the result."
+            git status --porcelain dist/
+            git diff --stat dist/
+            exit 1
+          fi

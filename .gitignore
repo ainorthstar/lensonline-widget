@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Local env
+*.local
+.env
+.env.local
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Note: dist/ is intentionally NOT ignored.
+# The built widget.js is committed so it can be served via jsdelivr CDN
+# (https://cdn.jsdelivr.net/gh/<owner>/<repo>@<tag>/dist/widget.js).
+# A GitHub Action verifies on every PR that the committed dist matches
+# what the source produces — see .github/workflows/build.yml.
