@@ -1,6 +1,6 @@
 {
   "name": "lensonline-widget",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Embeddable customer-chat widget for lensonline.be",
   "license": "MIT",
   "repository": {
@@ -20,7 +20,8 @@
     "@assistant-ui/react-ui": "^0.2.1",
     "@assistant-ui/styles": "^0.3.7",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "smooch": "^5.7.17"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

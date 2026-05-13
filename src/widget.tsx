@@ -1,24 +1,125 @@
 /**
- * LensOnline chat widget — assistant-ui based.
+ * LensOnline chat widget — assistant-ui front, Sunshine Conversations transport.
  *
- * Talks to the deployed LensOnline bot via the lensonline-chat-proxy on
- * Cloud Run, which forwards to the Vertex AI Agent Runtime A2A endpoint.
- * The proxy adds the Google OAuth bearer token and enforces an origin
- * allow-list + rate limit, so the browser never sees credentials.
+ * Architecture (Option C):
+ *   [this widget on framer/lensonline.be]
+ *      ↑↓ via Smooch.js (Sunshine Web SDK in headless mode)
+ *   [Zendesk Sunshine Conversations]
+ *      ↑↓ webhook ↔ POST reply
+ *   [lensonline-chat-bridge on Cloud Run]
+ *      ↑↓ A2A REST
+ *   [Vertex AI Agent Runtime — the bot]
+ *
+ * Sunshine's switchboard routes user messages to the bot by default, and to
+ * Zendesk Agent Workspace (a human on the CS team) when the bot calls
+ * passControl. The customer never knows whether they're talking to the bot
+ * or a person — same widget, same conversation, transparent handoff.
  */
 
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useA2ARuntime } from "@assistant-ui/react-a2a";
+import {
+  AssistantRuntimeProvider,
+  type AppendMessage,
+  type ThreadMessageLike,
+  useExternalStoreRuntime,
+} from "@assistant-ui/react";
 import { Thread } from "@assistant-ui/react-ui";
-import { useState } from "react";
+import Smooch from "smooch";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "@assistant-ui/react-ui/styles/index.css";
 import "@assistant-ui/react-ui/styles/modal.css";
 
-const PROXY_BASE_URL =
-  "https://lensonline-chat-proxy-4739299408.europe-west1.run.app/a2a";
+// Sunshine "Web Messenger" integration id — customer-facing channel for
+// lensonline.be. The widget connects here; Sunshine fans messages out to
+// whatever integration is currently active in the switchboard (bot or human).
+const SUNSHINE_INTEGRATION_ID = "6a0441e958061fe426bca46c";
+
+type SmoochMessage = {
+  _id?: string;
+  type?: string;
+  text?: string;
+  author?: { type?: "user" | "business"; displayName?: string };
+  received?: number;
+  source?: { type?: string };
+};
+
+function smoochToAui(msg: SmoochMessage): ThreadMessageLike {
+  const isUser = msg.author?.type === "user";
+  return {
+    role: isUser ? "user" : "assistant",
+    content: [{ type: "text", text: msg.text ?? "" }],
+  };
+}
 
 function ChatPanel({ onClose }: { onClose: () => void }) {
-  const runtime = useA2ARuntime({ baseUrl: PROXY_BASE_URL });
+  const [messages, setMessages] = useState<ThreadMessageLike[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const initStartedRef = useRef(false);
+
+  // Initialize Smooch once
+  useEffect(() => {
+    if (initStartedRef.current) return;
+    initStartedRef.current = true;
+
+    Smooch.init({
+      integrationId: SUNSHINE_INTEGRATION_ID,
+      embedded: true, // headless mode — Smooch handles state + transport, we render
+    })
+      .then(() => {
+        // Hydrate with any existing conversation history
+        const existing = Smooch.getConversations?.()?.[0]?.messages ?? [];
+        if (existing.length > 0) {
+          setMessages(existing.map(smoochToAui));
+        }
+      })
+      .catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error("[lensonline-widget] Smooch.init failed:", err);
+      });
+
+    // Wire up incoming-message listener
+    const onMessageReceived = (msg: SmoochMessage) => {
+      // Skip echoes of our own user messages (they're added optimistically below)
+      if (msg.source?.type === "web" && msg.author?.type === "user") return;
+      setMessages((prev) => [...prev, smoochToAui(msg)]);
+      if (msg.author?.type === "business") setIsRunning(false);
+    };
+    Smooch.on("message:received", onMessageReceived);
+
+    return () => {
+      try {
+        Smooch.off("message:received", onMessageReceived);
+      } catch {
+        /* fine */
+      }
+    };
+  }, []);
+
+  const onNew = useCallback(async (message: AppendMessage) => {
+    if (message.content.length !== 1 || message.content[0]?.type !== "text") {
+      throw new Error("only text content supported");
+    }
+    const text = message.content[0].text;
+    // Optimistically render the user's message immediately
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: [{ type: "text", text }] },
+    ]);
+    setIsRunning(true);
+    try {
+      await Smooch.sendMessage({ type: "text", text });
+    } catch (err) {
+      setIsRunning(false);
+      // eslint-disable-next-line no-console
+      console.error("[lensonline-widget] sendMessage failed:", err);
+    }
+  }, []);
+
+  const runtime = useExternalStoreRuntime({
+    isRunning,
+    messages,
+    onNew,
+    convertMessage: (m) => m,
+  });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -40,7 +141,6 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
           zIndex: 2147483646,
         }}
       >
-        {/* Header */}
         <div
           style={{
             background: "#0066cc",
@@ -76,7 +176,6 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        {/* assistant-ui Thread */}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Thread />
         </div>
