@@ -17,7 +17,7 @@ One line, end of `<body>`:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/gh/sikahsdkfhaksjdhfkjhasdkfh/lensonline-widget@v0.1.0/dist/widget.js"
+  src="https://cdn.jsdelivr.net/gh/ainorthstar/lensonline-widget@v0.1.0/dist/widget.js"
   defer
 ></script>
 ```
@@ -75,7 +75,7 @@ git push && git push --tags
 ```
 
 jsdelivr will serve the new tag at
-`https://cdn.jsdelivr.net/gh/sikahsdkfhaksjdhfkjhasdkfh/lensonline-widget@v0.x.y/dist/widget.js`.
+`https://cdn.jsdelivr.net/gh/ainorthstar/lensonline-widget@v0.x.y/dist/widget.js`.
 
 ## License
 
